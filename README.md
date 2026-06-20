@@ -1,36 +1,84 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Warehouse Floor Scan
 
-## Getting Started
+Next.js mobile PWA for warehouse staff. Python API proxies to WarehouseDB.
 
-First, run the development server:
+## Server install (Raspberry Pi / Linux)
+
+See **[INSTALL.md](./INSTALL.md)** for the full guide. Run this **once** — it
+installs everything and auto-starts on every reboot (you never start it by hand):
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone <your-repo-url> warehouse  # or copy the project onto the server
+cd warehouse/Warehouse_scan          # the folder that holds install.sh
+chmod +x install.sh run.sh start.sh
+./install.sh                         # install + systemd (PWA + API), starts now + on boot
+./install.sh --with-warehouse        # + WarehouseDB on same host
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open **http://\<server-ip\>:5002** on phones → Add to Home Screen.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+# after code updates: git pull && ./install.sh
+systemctl status warehouse-scan      # check the always-on service
+sudo systemctl restart warehouse-scan
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+License: MIT — see `LICENSE` and `THIRD_PARTY_LICENSES.md`.
 
-## Learn More
+## Run locally (development)
 
-To learn more about Next.js, take a look at the following resources:
+**Windows (easiest)**
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```powershell
+cd Warehouse_scan
+.\dev.ps1
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+**Linux / macOS — two terminals**
 
-## Deploy on Vercel
+```bash
+# Terminal 1 — API (port 5003)
+cd Warehouse_scan/backend
+pip install -r requirements.txt
+python run.py
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+# Terminal 2 — UI (port 5002)
+cd Warehouse_scan
+cp .env.example .env
+pnpm install
+pnpm dev
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Open http://localhost:5002/sign-in — on **first visit**, create the one owner account on the setup form (username and password of your choice). Sign in with those credentials afterward. Change them later under **Account**.
+
+## Production (manual)
+
+```bash
+cd Warehouse_scan
+./install.sh
+./run.sh
+```
+
+## Stack
+
+| Layer | Tech |
+|-------|------|
+| UI | Next.js 16, React 19, [Lucide icons](https://lucide.dev/icons/) |
+| API | Flask (`Warehouse_scan/backend/`) → WarehouseDB session proxy |
+| Camera | html5-qrcode (requires HTTPS or localhost) |
+
+## PWA
+
+Add to home screen from Safari (iOS) or Chrome (Android). Icons use the teal brand with a Lucide-style scan frame.
+
+## Environment
+
+Copy `.env.example` to `.env`:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `WAREHOUSE_URL` | `http://127.0.0.1:8000` | WarehouseDB server |
+| `SCAN_SECRET_KEY` | dev secret | Flask session signing |
+| `SCAN_BACKEND_URL` | `http://127.0.0.1:5003` | Used by Next API proxy |
+| `SCAN_PORT` | `5002` | Production PWA port |
+| `SCAN_HOST` | `0.0.0.0` | Production bind address |

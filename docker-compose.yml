@@ -1,0 +1,27 @@
+# Warehouse Floor Scan — Docker (native alternative: ./install.sh)
+#
+#   ./install.sh --docker
+#   # or: docker compose up --build -d
+
+services:
+  scan:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: warehouse-scan:latest
+    container_name: warehouse-scan
+    command: ["sh", "start.sh"]
+    ports:
+      - "${SCAN_PORT:-5002}:5002"
+      - "${SCAN_API_PORT:-5003}:5003"
+    env_file:
+      - .env
+    environment:
+      SCAN_API_HOST: 0.0.0.0
+      SCAN_HOST: 0.0.0.0
+    volumes:
+      - scan_data:/app/instance
+    restart: unless-stopped
+
+volumes:
+  scan_data:
