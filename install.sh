@@ -41,7 +41,7 @@ done
 
 trap stop_sudo_keepalive EXIT
 
-TOTAL_STEPS=6
+TOTAL_STEPS=7
 if [ -t 1 ]; then clear 2>/dev/null || true; fi
 printf '\n  %sW A R E H O U S E%s\n%s' "$DIM" "$RESET" "$GREEN"
 cat <<'ART'
@@ -116,6 +116,7 @@ EOF
   sudo docker compose up -d --build
   echo
   ok "Scan running (Docker) — http://127.0.0.1:${UI_PORT}"
+  open_firewall_port "$UI_PORT" "Warehouse Scan"
   note "logs: docker compose logs -f scan"
   exit 0
 fi
@@ -203,6 +204,9 @@ if $INSTALL_SERVICE; then
 else
   note "Start manually: $SCAN_ROOT/run.sh"
 fi
+
+step "Firewall"
+open_firewall_port "$UI_PORT" "Warehouse Scan"
 
 echo
 echo "  ${GREEN}${BOLD}✓ Warehouse Scan ready${RESET}"
