@@ -77,6 +77,17 @@ if [ "$UI_PORT" = "$API_PORT" ]; then
 fi
 ok "Ports — PWA $UI_PORT, API $API_PORT"
 
+# SCAN_API_KEY must match WarehouseDB's. Reuse the hub's key if WarehouseDB is on
+# this machine; otherwise generate a strong one (set the same value on WarehouseDB).
+WH_ENV="$PROJECT_ROOT/WarehouseDB/instance/warehousedb.env"
+if [ -f "$WH_ENV" ] && grep -q '^SCAN_API_KEY=' "$WH_ENV"; then
+  SCAN_KEY="$(grep '^SCAN_API_KEY=' "$WH_ENV" | cut -d= -f2-)"
+  SCAN_KEY_SRC="matched WarehouseDB on this machine"
+else
+  SCAN_KEY="$(python3 -c 'import secrets; print(secrets.token_hex(24))')"
+  SCAN_KEY_SRC="generated — set SCAN_API_KEY=$SCAN_KEY in WarehouseDB to match"
+fi
+
 if $USE_DOCKER; then
   install_docker_engine
   ENV_FILE="$SCAN_ROOT/.env"
@@ -85,7 +96,7 @@ if $USE_DOCKER; then
     cat >"$ENV_FILE" <<EOF
 FLASK_ENV=production
 WAREHOUSE_URL=http://127.0.0.1:8000
-SCAN_API_KEY=scan-dev-key
+SCAN_API_KEY=$SCAN_KEY
 SCAN_SECRET_KEY=$SECRET
 SCAN_API_HOST=0.0.0.0
 SCAN_API_PORT=$API_PORT
@@ -115,10 +126,9 @@ note "virtualenv: $VENV"
 if [ ! -d "$VENV" ]; then
   "$PYTHON" -m venv "$VENV"
 fi
-note "installing API dependencies…"
-"$VENV/bin/pip" install --upgrade pip >/dev/null
-"$VENV/bin/pip" install -r "$SCAN_ROOT/requirements.txt"
-ok "API dependencies installed"
+"$VENV/bin/pip" install --upgrade pip >/dev/null 2>&1 || true
+spin_ok "Installing API dependencies…" "API dependencies installed" \
+  "$VENV/bin/pip" install -r "$SCAN_ROOT/requirements.txt"
 
 step "Configuration"
 ENV_FILE="$SCAN_ROOT/.env"
@@ -128,7 +138,7 @@ if [ ! -f "$ENV_FILE" ]; then
   cat >"$ENV_FILE" <<EOF
 FLASK_ENV=production
 WAREHOUSE_URL=http://127.0.0.1:8000
-SCAN_API_KEY=scan-dev-key
+SCAN_API_KEY=$SCAN_KEY
 SCAN_SECRET_KEY=$SECRET
 SCAN_API_HOST=127.0.0.1
 SCAN_API_PORT=$API_PORT
@@ -137,11 +147,16 @@ SCAN_PORT=$UI_PORT
 SCAN_HOST=0.0.0.0
 EOF
   chmod 600 "$ENV_FILE"
+  ok "Created $ENV_FILE — SCAN_API_KEY $SCAN_KEY_SRC"
 else
   note "updating ports in $ENV_FILE"
   set_env_kv "$ENV_FILE" SCAN_PORT "$UI_PORT"
   set_env_kv "$ENV_FILE" SCAN_API_PORT "$API_PORT"
   set_env_kv "$ENV_FILE" SCAN_BACKEND_URL "http://127.0.0.1:$API_PORT"
+  if grep -q '^SCAN_API_KEY=scan-dev-key$' "$ENV_FILE"; then
+    set_env_kv "$ENV_FILE" SCAN_API_KEY "$SCAN_KEY"
+    warn "Updated SCAN_API_KEY ($SCAN_KEY_SRC)"
+  fi
 fi
 
 mkdir -p "$SCAN_ROOT/instance"
@@ -154,10 +169,10 @@ chmod 600 "$INSTALL_META"
 
 step "Build"
 cd "$SCAN_ROOT"
-note "installing Node dependencies + production build…"
-pnpm install --frozen-lockfile
-pnpm build
-ok "Production build ready"
+spin_ok "Installing Node dependencies…" "Node dependencies installed" \
+  pnpm install --frozen-lockfile
+spin_ok "Building production PWA…" "Production build ready" \
+  pnpm build
 
 set -a
 # shellcheck disable=SC1090
