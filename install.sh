@@ -41,16 +41,20 @@ done
 
 trap stop_sudo_keepalive EXIT
 
-printf '\n%s' "$GREEN"
+TOTAL_STEPS=6
+if [ -t 1 ]; then clear 2>/dev/null || true; fi
+printf '\n  %sW A R E H O U S E%s\n%s' "$DIM" "$RESET" "$GREEN"
 cat <<'ART'
-__      ___   ___ ___ _  _  ___  _   _ ___ ___   ___  ___   _   _  _
-\ \    / /_\ | _ \ __| || |/ _ \| | | / __| __| / __|/ __| /_\ | \| |
- \ \/\/ / _ \|   / _|| __ | (_) | |_| \__ \ _|  \__ \ (__ / _ \| .` |
-  \_/\_/_/ \_\_|_\___|_||_|\___/ \___/|___/___| |___/\___/_/ \_\_|\_|
+  ███████╗ ██████╗ █████╗ ███╗   ██╗
+  ██╔════╝██╔════╝██╔══██╗████╗  ██║
+  ███████╗██║     ███████║██╔██╗ ██║
+  ╚════██║██║     ██╔══██║██║╚██╗██║
+  ███████║╚██████╗██║  ██║██║ ╚████║
+  ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 ART
 printf '%s\n' "$RESET"
-echo "  ${DIM}Floor scanning PWA for staff — your warehouse, your control.${RESET}"
-echo "  ${DIM}scan app: $SCAN_ROOT${RESET}"
+echo "  ${BOLD}Warehouse Scan${RESET}  ${DIM}— floor scanning PWA for staff${RESET}           ${DIM}self-hosted${RESET}"
+echo "  ${DIM}──────────────────────────────────────────────────────────${RESET}"
 echo
 
 step "System packages & toolchain"
@@ -61,8 +65,7 @@ ensure_pnpm
 install_cloudflared
 
 if $WITH_WAREHOUSE; then
-  step "WarehouseDB (on this machine)"
-  note "running WarehouseDB installer…"
+  printf '\n  %s▶ Installing WarehouseDB on this machine…%s\n' "$CYAN" "$RESET"
   "$PROJECT_ROOT/WarehouseDB/install.sh"
 fi
 
