@@ -41,12 +41,6 @@ done
 
 trap stop_sudo_keepalive EXIT
 
-if [ -t 1 ]; then
-  GREEN=$'\033[1;32m'; BOLD=$'\033[1m'; DIM=$'\033[2m'; RESET=$'\033[0m'
-else
-  GREEN=''; BOLD=''; DIM=''; RESET=''
-fi
-
 printf '\n%s' "$GREEN"
 cat <<'ART'
 __      ___   ___ ___ _  _  ___  _   _ ___ ___   ___  ___   _   _  _
@@ -59,6 +53,7 @@ echo "  ${DIM}Floor scanning PWA for staff — your warehouse, your control.${RE
 echo "  ${DIM}scan app: $SCAN_ROOT${RESET}"
 echo
 
+step "System packages & toolchain"
 ensure_sudo
 apt_bootstrap
 ensure_node
@@ -66,16 +61,18 @@ ensure_pnpm
 install_cloudflared
 
 if $WITH_WAREHOUSE; then
-  echo "==> Installing WarehouseDB on this machine"
+  step "WarehouseDB (on this machine)"
+  note "running WarehouseDB installer…"
   "$PROJECT_ROOT/WarehouseDB/install.sh"
 fi
 
+step "Network ports"
 UI_PORT="$(find_free_port 5002)"
 API_PORT="$(find_free_port 5003)"
 if [ "$UI_PORT" = "$API_PORT" ]; then
   API_PORT="$(find_free_port $((UI_PORT + 1)))"
 fi
-echo "==> Ports: PWA $UI_PORT, API $API_PORT"
+ok "Ports — PWA $UI_PORT, API $API_PORT"
 
 if $USE_DOCKER; then
   install_docker_engine
@@ -99,26 +96,31 @@ EOF
     set_env_kv "$ENV_FILE" SCAN_API_PORT "$API_PORT"
     set_env_kv "$ENV_FILE" SCAN_BACKEND_URL "http://127.0.0.1:$API_PORT"
   fi
-  echo "==> Starting Scan with Docker"
+  step "Docker"
+  note "starting Scan with Docker…"
   cd "$SCAN_ROOT"
   sudo docker compose up -d --build
   echo
-  echo "==> Done (Docker). PWA: http://127.0.0.1:${UI_PORT}"
-  echo "    logs: docker compose logs -f scan"
+  ok "Scan running (Docker) — http://127.0.0.1:${UI_PORT}"
+  note "logs: docker compose logs -f scan"
   exit 0
 fi
 
+step "Python environment"
 VENV="$SCAN_ROOT/.venv"
-echo "==> Python virtualenv: $VENV"
+note "virtualenv: $VENV"
 if [ ! -d "$VENV" ]; then
   "$PYTHON" -m venv "$VENV"
 fi
+note "installing API dependencies…"
 "$VENV/bin/pip" install --upgrade pip >/dev/null
 "$VENV/bin/pip" install -r "$SCAN_ROOT/requirements.txt"
+ok "API dependencies installed"
 
+step "Configuration"
 ENV_FILE="$SCAN_ROOT/.env"
 if [ ! -f "$ENV_FILE" ]; then
-  echo "==> Creating $ENV_FILE"
+  note "creating $ENV_FILE with a random secret"
   SECRET="$("$VENV/bin/python" -c 'import secrets; print(secrets.token_hex(32))')"
   cat >"$ENV_FILE" <<EOF
 FLASK_ENV=production
@@ -133,7 +135,7 @@ SCAN_HOST=0.0.0.0
 EOF
   chmod 600 "$ENV_FILE"
 else
-  echo "==> Updating ports in $ENV_FILE"
+  note "updating ports in $ENV_FILE"
   set_env_kv "$ENV_FILE" SCAN_PORT "$UI_PORT"
   set_env_kv "$ENV_FILE" SCAN_API_PORT "$API_PORT"
   set_env_kv "$ENV_FILE" SCAN_BACKEND_URL "http://127.0.0.1:$API_PORT"
@@ -147,10 +149,12 @@ SCAN_VENV=$VENV
 EOF
 chmod 600 "$INSTALL_META"
 
-echo "==> Installing Node dependencies + production build"
+step "Build"
 cd "$SCAN_ROOT"
+note "installing Node dependencies + production build…"
 pnpm install --frozen-lockfile
 pnpm build
+ok "Production build ready"
 
 set -a
 # shellcheck disable=SC1090
@@ -165,20 +169,21 @@ try:
 except Exception:
     sys.exit(1)
 " 2>/dev/null; then
-  echo "    Warehouse reachable at $WAREHOUSE_URL"
+  ok "Warehouse reachable at $WAREHOUSE_URL"
 else
-  echo "    !! Warehouse not reachable at $WAREHOUSE_URL (start WarehouseDB or fix WAREHOUSE_URL)"
+  warn "Warehouse not reachable at $WAREHOUSE_URL (start WarehouseDB or fix WAREHOUSE_URL)"
 fi
 
 chmod +x "$SCAN_ROOT/start.sh" "$SCAN_ROOT/run.sh"
 
+step "Service (auto-start on boot)"
 if $INSTALL_SERVICE; then
   RUN_USER="${SUDO_USER:-$(whoami)}"
   install_systemd warehouse-scan "$SCAN_ROOT/deploy/warehouse-scan.service" "$SCAN_ROOT" "$RUN_USER" \
     -e "s|@VENV@|$VENV|g"
-  echo "    logs: journalctl -u warehouse-scan -f"
+  note "logs: journalctl -u warehouse-scan -f"
 else
-  echo "Start manually: $SCAN_ROOT/run.sh"
+  note "Start manually: $SCAN_ROOT/run.sh"
 fi
 
 echo
