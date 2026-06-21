@@ -58,6 +58,9 @@ export function asList<T>(data: unknown, nestedKey?: string): T[] {
 export type Me = {
   signed_in: boolean;
   username?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
   remember_device?: boolean;
 };
 

@@ -21,12 +21,21 @@ function validateNewPassword(password: string): string | null {
 
 export function AccountCredentialsSection({
   username,
+  firstName: initialFirstName,
+  lastName: initialLastName,
+  email: initialEmail,
   onUpdated,
 }: {
   username: string;
+  firstName: string;
+  lastName: string;
+  email: string;
   onUpdated: (nextUsername: string) => void;
 }) {
   const { showToast } = useToast();
+  const [firstName, setFirstName] = useState(initialFirstName);
+  const [lastName, setLastName] = useState(initialLastName);
+  const [email, setEmail] = useState(initialEmail);
   const [nextUsername, setNextUsername] = useState(username);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -35,6 +44,14 @@ export function AccountCredentialsSection({
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     const trimmedUsername = nextUsername.trim();
+    if (!firstName.trim() || !lastName.trim()) {
+      showToast("First and last name are required", true);
+      return;
+    }
+    if (!email.trim()) {
+      showToast("Email is required", true);
+      return;
+    }
     if (!trimmedUsername) {
       showToast("Username is required", true);
       return;
@@ -52,6 +69,9 @@ export function AccountCredentialsSection({
     setBusy(true);
     try {
       const res = await put<{ ok?: boolean; username?: string }>("/api/account", {
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        email: email.trim(),
         username: trimmedUsername,
         current_password: currentPassword,
         new_password: newPassword.trim() || undefined,
@@ -75,7 +95,7 @@ export function AccountCredentialsSection({
   return (
     <SettingsSection
       title="Login profile"
-      description="Change your username and password — current password required"
+      description="Change your name, email, username and password — current password required"
       icon={UserRound}
     >
       <form className="space-y-3" onSubmit={(e) => void onSubmit(e)}>
@@ -83,6 +103,49 @@ export function AccountCredentialsSection({
           Scan login is stored in <strong className="font-semibold text-[var(--text)]">Warehouse_scan/instance/scan.db</strong> on
           this server. First visit creates the one owner account. Inventory and tasks come from WarehouseDB over the API.
         </p>
+
+        <div className="space-y-2">
+          <Label htmlFor="profile-first-name" className="text-[13px] font-semibold text-muted-foreground">
+            First name
+          </Label>
+          <Input
+            id="profile-first-name"
+            className="h-12 rounded-xl border-0 bg-white px-4 text-base shadow-[0_1px_4px_rgba(26,31,30,0.06)]"
+            autoComplete="given-name"
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+            required
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="profile-last-name" className="text-[13px] font-semibold text-muted-foreground">
+            Last name
+          </Label>
+          <Input
+            id="profile-last-name"
+            className="h-12 rounded-xl border-0 bg-white px-4 text-base shadow-[0_1px_4px_rgba(26,31,30,0.06)]"
+            autoComplete="family-name"
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+            required
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="profile-email" className="text-[13px] font-semibold text-muted-foreground">
+            Email
+          </Label>
+          <Input
+            id="profile-email"
+            type="email"
+            className="h-12 rounded-xl border-0 bg-white px-4 text-base shadow-[0_1px_4px_rgba(26,31,30,0.06)]"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </div>
 
         <div className="space-y-2">
           <Label htmlFor="profile-username" className="text-[13px] font-semibold text-muted-foreground">

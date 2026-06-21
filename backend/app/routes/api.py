@@ -44,6 +44,9 @@ def me():
     return jsonify(
         signed_in=True,
         username=row["username"],
+        first_name=row["first_name"] or "",
+        last_name=row["last_name"] or "",
+        email=row["email"] or "",
         remember_device=bool(session.permanent),
     )
 
@@ -53,12 +56,21 @@ def setup_account():
     body = request.get_json(silent=True) or {}
     username = (body.get("username") or "").strip()
     password = body.get("password") or ""
+    confirm = body.get("confirm_password") or ""
     if not username or not password:
         return jsonify(error="Username and password are required"), 400
+    if confirm and password != confirm:
+        return jsonify(error="The two passwords do not match"), 400
     if not staff.needs_setup():
         return jsonify(error="This Scan server already has an owner account"), 403
     try:
-        row = staff.setup_owner(username, password)
+        row = staff.setup_owner(
+            username,
+            password,
+            first_name=body.get("first_name") or "",
+            last_name=body.get("last_name") or "",
+            email=body.get("email") or "",
+        )
     except ValueError as exc:
         return jsonify(error=str(exc)), 400
     remember = bool(body.get("remember_device"))
@@ -133,11 +145,20 @@ def update_account():
             username=(body.get("username") or "").strip(),
             current_password=body.get("current_password") or "",
             new_password=(body.get("new_password") or "").strip() or None,
+            first_name=body.get("first_name"),
+            last_name=body.get("last_name"),
+            email=body.get("email"),
         )
     except ValueError as exc:
         return jsonify(error=str(exc)), 400
     session["staff_username"] = updated["username"]
-    return jsonify(ok=True, username=updated["username"])
+    return jsonify(
+        ok=True,
+        username=updated["username"],
+        first_name=updated["first_name"] or "",
+        last_name=updated["last_name"] or "",
+        email=updated["email"] or "",
+    )
 
 
 @api_bp.get("/bootstrap")

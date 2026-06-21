@@ -29,17 +29,31 @@ def needs_setup() -> bool:
     return get_db().execute("SELECT COUNT(*) c FROM staff_users").fetchone()["c"] == 0
 
 
-def setup_owner(username: str, password: str):
+def _validate_email(email: str) -> str:
+    email = (email or "").strip()
+    if "@" not in email or "." not in email.rsplit("@", 1)[-1]:
+        raise ValueError("A valid email address is required")
+    return email
+
+
+def setup_owner(username: str, password: str, *, first_name: str = "", last_name: str = "", email: str = ""):
     if not needs_setup():
         raise ValueError("An account already exists for this Scan server.")
+    first_name = (first_name or "").strip()
+    last_name = (last_name or "").strip()
     username = (username or "").strip()
+    if not first_name:
+        raise ValueError("First name is required")
+    if not last_name:
+        raise ValueError("Last name is required")
     if not username:
         raise ValueError("Username is required")
+    email = _validate_email(email)
     validate_password(password)
     db = get_db()
     db.execute(
-        "INSERT INTO staff_users(username, password_hash) VALUES(?,?)",
-        (username, generate_password_hash(password)),
+        "INSERT INTO staff_users(username, password_hash, first_name, last_name, email) VALUES(?,?,?,?,?)",
+        (username, generate_password_hash(password), first_name, last_name, email),
     )
     db.commit()
     return get_by_username(username)
@@ -77,7 +91,16 @@ def get_by_id(user_id: int):
     return get_db().execute("SELECT * FROM staff_users WHERE id=?", (user_id,)).fetchone()
 
 
-def update_credentials(user_id: int, *, username: str, current_password: str, new_password: str | None = None):
+def update_credentials(
+    user_id: int,
+    *,
+    username: str,
+    current_password: str,
+    new_password: str | None = None,
+    first_name: str | None = None,
+    last_name: str | None = None,
+    email: str | None = None,
+):
     row = get_by_id(user_id)
     if not row or not check_password_hash(row["password_hash"], current_password):
         raise ValueError("Current password is incorrect")
@@ -93,11 +116,29 @@ def update_credentials(user_id: int, *, username: str, current_password: str, ne
     ).fetchone()
     if other:
         raise ValueError("That username is already taken")
-    password_hash = generate_password_hash(new_password) if new_password else row["password_hash"]
-    db.execute(
-        "UPDATE staff_users SET username=?, password_hash=? WHERE id=?",
-        (username, password_hash, user_id),
-    )
+
+    fields = ["username=?"]
+    params: list = [username]
+    if first_name is not None:
+        first_name = first_name.strip()
+        if not first_name:
+            raise ValueError("First name is required")
+        fields.append("first_name=?")
+        params.append(first_name)
+    if last_name is not None:
+        last_name = last_name.strip()
+        if not last_name:
+            raise ValueError("Last name is required")
+        fields.append("last_name=?")
+        params.append(last_name)
+    if email is not None:
+        fields.append("email=?")
+        params.append(_validate_email(email))
+    if new_password:
+        fields.append("password_hash=?")
+        params.append(generate_password_hash(new_password))
+    params.append(user_id)
+    db.execute(f"UPDATE staff_users SET {', '.join(fields)} WHERE id=?", params)
     db.commit()
     return get_by_id(user_id)
 

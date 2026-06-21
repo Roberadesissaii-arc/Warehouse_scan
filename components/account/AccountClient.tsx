@@ -83,6 +83,9 @@ export function AccountClient() {
       <AccountCredentialsSection
         key={displayName}
         username={displayName}
+        firstName={me?.first_name || ""}
+        lastName={me?.last_name || ""}
+        email={me?.email || ""}
         onUpdated={async (nextUsername) => {
           await refresh();
           if (remember) setRememberDevice(true, nextUsername);

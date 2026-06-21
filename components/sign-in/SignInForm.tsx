@@ -14,6 +14,10 @@ export function SignInForm() {
   const [apiDown, setApiDown] = useState(false);
   const [username, setUsername] = useState(getLastUsername);
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
   const [remember, setRemember] = useState(getRememberDevice);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +77,20 @@ export function SignInForm() {
     const user = username.trim();
     try {
       if (needsSetup) {
-        await post("/api/auth/setup", { username: user, password, remember_device: remember });
+        if (password !== confirmPassword) {
+          setError("The two passwords do not match.");
+          setBusy(false);
+          return;
+        }
+        await post("/api/auth/setup", {
+          username: user,
+          password,
+          confirm_password: confirmPassword,
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+          email: email.trim(),
+          remember_device: remember,
+        });
       } else {
         await post("/api/auth/login", { username: user, password, remember_device: remember });
       }
@@ -113,6 +130,39 @@ export function SignInForm() {
         </div>
 
         <form onSubmit={onSubmit} className="auth-form" method="post" action="/sign-in">
+          {needsSetup ? (
+            <>
+              <label className="input-field">
+                <span>First name</span>
+                <input
+                  type="text"
+                  placeholder="First name"
+                  autoComplete="given-name"
+                  value={firstName}
+                  onChange={(e) => {
+                    setFirstName(e.target.value);
+                    if (error) setError(null);
+                  }}
+                  required
+                />
+              </label>
+              <label className="input-field">
+                <span>Last name</span>
+                <input
+                  type="text"
+                  placeholder="Last name"
+                  autoComplete="family-name"
+                  value={lastName}
+                  onChange={(e) => {
+                    setLastName(e.target.value);
+                    if (error) setError(null);
+                  }}
+                  required
+                />
+              </label>
+            </>
+          ) : null}
+
           <label className="input-field">
             <span>Username</span>
             <input
@@ -128,6 +178,23 @@ export function SignInForm() {
             />
           </label>
 
+          {needsSetup ? (
+            <label className="input-field">
+              <span>Email</span>
+              <input
+                type="email"
+                placeholder="you@example.com"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (error) setError(null);
+                }}
+                required
+              />
+            </label>
+          ) : null}
+
           <label className="input-field">
             <span>Password</span>
             <input
@@ -142,6 +209,23 @@ export function SignInForm() {
               required
             />
           </label>
+
+          {needsSetup ? (
+            <label className="input-field">
+              <span>Confirm password</span>
+              <input
+                type="password"
+                placeholder="Re-enter password"
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  if (error) setError(null);
+                }}
+                required
+              />
+            </label>
+          ) : null}
 
           <label className="remember-field">
             <input
