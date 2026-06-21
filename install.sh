@@ -6,6 +6,7 @@
 #   ./install.sh --no-service       # install only, start with ./run.sh
 #   ./install.sh --docker           # Docker instead of native
 #   ./install.sh --with-warehouse   # also install WarehouseDB on this machine
+#   ./install.sh --reset            # wipe the database, then reinstall fresh
 #
 set -euo pipefail
 
@@ -18,9 +19,10 @@ PYTHON="${PYTHON:-python3}"
 WITH_WAREHOUSE=false
 INSTALL_SERVICE=true
 USE_DOCKER=false
+RESET_DB=false
 
 usage() {
-  sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 while [ $# -gt 0 ]; do
@@ -29,6 +31,7 @@ while [ $# -gt 0 ]; do
     --service) INSTALL_SERVICE=true ;;
     --no-service) INSTALL_SERVICE=false ;;
     --docker) USE_DOCKER=true ;;
+    --reset) RESET_DB=true ;;
     -h|--help) usage; exit 0 ;;
     *)
       echo "Unknown option: $1" >&2
@@ -59,6 +62,11 @@ echo
 
 step "System packages & toolchain"
 ensure_sudo
+stop_service_if_running warehouse-scan
+if $RESET_DB; then
+  warn "--reset: wiping the existing database for a clean start"
+  rm -f "$SCAN_ROOT"/instance/scan.db* 2>/dev/null || true
+fi
 apt_bootstrap
 ensure_node
 ensure_pnpm
