@@ -20,6 +20,7 @@ WITH_WAREHOUSE=false
 INSTALL_SERVICE=true
 USE_DOCKER=false
 RESET_DB=false
+WEB_MODE=false
 
 usage() {
   sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
@@ -32,6 +33,7 @@ while [ $# -gt 0 ]; do
     --no-service) INSTALL_SERVICE=false ;;
     --docker) USE_DOCKER=true ;;
     --reset) RESET_DB=true ;;
+    --web) WEB_MODE=true ;;
     -h|--help) usage; exit 0 ;;
     *)
       echo "Unknown option: $1" >&2
@@ -43,6 +45,55 @@ while [ $# -gt 0 ]; do
 done
 
 trap stop_sudo_keepalive EXIT
+
+if $WEB_MODE; then
+  # No-sudo install triggered by the WarehouseDB "Install" button. Assumes the
+  # toolchain (node, pnpm, python3) is already present from the first setup.
+  command -v node >/dev/null 2>&1 && command -v pnpm >/dev/null 2>&1 && command -v "$PYTHON" >/dev/null 2>&1 || {
+    echo "Toolchain missing — run ./install.sh once in a terminal first." >&2; exit 1; }
+  cd "$SCAN_ROOT"
+  UI_PORT="$(find_free_port 5002)"
+  API_PORT="$(find_free_port 5003)"
+  [ "$UI_PORT" = "$API_PORT" ] && API_PORT="$(find_free_port $((UI_PORT + 1)))"
+  WH_ENV="$PROJECT_ROOT/WarehouseDB/instance/warehousedb.env"
+  SCAN_KEY="$(grep '^SCAN_API_KEY=' "$WH_ENV" 2>/dev/null | cut -d= -f2- || true)"
+  [ -n "$SCAN_KEY" ] || SCAN_KEY="$("$PYTHON" -c 'import secrets; print(secrets.token_hex(24))')"
+  VENV="$SCAN_ROOT/.venv"
+  [ -d "$VENV" ] || "$PYTHON" -m venv "$VENV"
+  "$VENV/bin/pip" install --upgrade pip >/dev/null 2>&1 || true
+  "$VENV/bin/pip" install -r "$SCAN_ROOT/requirements.txt"
+  ENV_FILE="$SCAN_ROOT/.env"
+  if [ ! -f "$ENV_FILE" ]; then
+    SECRET="$("$VENV/bin/python" -c 'import secrets; print(secrets.token_hex(32))')"
+    cat >"$ENV_FILE" <<EOF
+FLASK_ENV=production
+WAREHOUSE_URL=http://127.0.0.1:8000
+SCAN_API_KEY=$SCAN_KEY
+SCAN_SECRET_KEY=$SECRET
+SCAN_API_HOST=127.0.0.1
+SCAN_API_PORT=$API_PORT
+SCAN_BACKEND_URL=http://127.0.0.1:$API_PORT
+SCAN_PORT=$UI_PORT
+SCAN_HOST=0.0.0.0
+EOF
+    chmod 600 "$ENV_FILE"
+  else
+    set_env_kv "$ENV_FILE" SCAN_PORT "$UI_PORT"
+    set_env_kv "$ENV_FILE" SCAN_API_PORT "$API_PORT"
+    set_env_kv "$ENV_FILE" SCAN_BACKEND_URL "http://127.0.0.1:$API_PORT"
+  fi
+  mkdir -p "$SCAN_ROOT/instance"
+  cat >"$SCAN_ROOT/instance/install.env" <<EOF
+SCAN_ROOT=$SCAN_ROOT
+SCAN_VENV=$VENV
+EOF
+  pnpm install --frozen-lockfile
+  pnpm build
+  chmod +x "$SCAN_ROOT/start.sh" "$SCAN_ROOT/run.sh"
+  install_user_service warehouse-scan "$SCAN_ROOT" "$VENV"
+  echo "WEB_INSTALL_OK http://127.0.0.1:$UI_PORT"
+  exit 0
+fi
 
 TOTAL_STEPS=7
 if [ -t 1 ]; then clear 2>/dev/null || true; fi
